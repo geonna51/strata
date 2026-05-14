@@ -27,6 +27,7 @@ include_directories(
 
 set(STRATA_SOURCES
   src/db_impl.cc
+  src/memtable.cc
 )
 
 add_library(strata STATIC ${STRATA_SOURCES})
@@ -36,3 +37,7 @@ enable_testing()
 add_executable(db_test tests/db_test.cc)
 target_link_libraries(db_test PRIVATE strata)
 add_test(NAME db_test COMMAND db_test)
+
+add_executable(memtable_test tests/memtable_test.cc)
+target_link_libraries(memtable_test PRIVATE strata)
+add_test(NAME memtable_test COMMAND memtable_test)
