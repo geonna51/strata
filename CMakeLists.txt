@@ -26,8 +26,10 @@ include_directories(
 )
 
 set(STRATA_SOURCES
+  src/crc32.cc
   src/db_impl.cc
   src/memtable.cc
+  src/wal.cc
 )
 
 add_library(strata STATIC ${STRATA_SOURCES})
@@ -41,3 +43,7 @@ add_test(NAME db_test COMMAND db_test)
 add_executable(memtable_test tests/memtable_test.cc)
 target_link_libraries(memtable_test PRIVATE strata)
 add_test(NAME memtable_test COMMAND memtable_test)
+
+add_executable(wal_test tests/wal_test.cc)
+target_link_libraries(wal_test PRIVATE strata)
+add_test(NAME wal_test COMMAND wal_test)
