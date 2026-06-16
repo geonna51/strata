@@ -26,9 +26,14 @@ include_directories(
 )
 
 set(STRATA_SOURCES
+  src/block.cc
+  src/block_cache.cc
+  src/bloom_filter.cc
   src/crc32.cc
   src/db_impl.cc
   src/memtable.cc
+  src/sstable_builder.cc
+  src/sstable_reader.cc
   src/wal.cc
 )
 
@@ -47,3 +52,7 @@ add_test(NAME memtable_test COMMAND memtable_test)
 add_executable(wal_test tests/wal_test.cc)
 target_link_libraries(wal_test PRIVATE strata)
 add_test(NAME wal_test COMMAND wal_test)
+
+add_executable(sstable_test tests/sstable_test.cc)
+target_link_libraries(sstable_test PRIVATE strata)
+add_test(NAME sstable_test COMMAND sstable_test)
