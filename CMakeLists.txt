@@ -34,6 +34,7 @@ set(STRATA_SOURCES
   src/memtable.cc
   src/sstable_builder.cc
   src/sstable_reader.cc
+  src/version_set.cc
   src/wal.cc
 )
 
@@ -56,3 +57,7 @@ add_test(NAME wal_test COMMAND wal_test)
 add_executable(sstable_test tests/sstable_test.cc)
 target_link_libraries(sstable_test PRIVATE strata)
 add_test(NAME sstable_test COMMAND sstable_test)
+
+add_executable(version_set_test tests/version_set_test.cc)
+target_link_libraries(version_set_test PRIVATE strata)
+add_test(NAME version_set_test COMMAND version_set_test)
