@@ -6,6 +6,7 @@
 #include "block.h"
 #include "block_cache.h"
 #include "format.h"
+#include "iterator_internal.h"
 #include "strata/iterator.h"
 #include "strata/options.h"
 #include "strata/slice.h"
@@ -31,7 +32,7 @@ class SSTableReader {
            Status* s, BlockCache* cache = nullptr);
 
   // Return a two-level iterator over all entries in the SSTable.
-  Iterator* NewIterator(BlockCache* cache = nullptr);
+  InternalIterator* NewIterator(BlockCache* cache = nullptr);
 
   uint64_t FileNumber() const { return file_number_; }
   uint64_t FileSize() const { return file_size_; }

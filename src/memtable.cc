@@ -101,6 +101,16 @@ Status Memtable::MemTableIterator::status() const {
   return Status::OK();
 }
 
+SequenceNumber Memtable::MemTableIterator::Seq() const {
+  assert(Valid());
+  return iter_.key().seq;
+}
+
+ValueType Memtable::MemTableIterator::Type() const {
+  assert(Valid());
+  return iter_.key().type;
+}
+
 const MemtableEntry& Memtable::MemTableIterator::Entry() const {
   return iter_.key();
 }
