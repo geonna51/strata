@@ -11,6 +11,8 @@
 #include "strata/slice.h"
 #include "strata/status.h"
 
+#include "iterator_internal.h"
+
 namespace strata {
 
 struct MemtableEntry {
@@ -51,7 +53,7 @@ class Memtable {
   // Returns number of entries in the memtable.
   size_t Count() const { return count_.load(std::memory_order_relaxed); }
 
-  class MemTableIterator : public Iterator {
+  class MemTableIterator : public InternalIterator {
    public:
     explicit MemTableIterator(const SkipList<MemtableEntry, MemtableKeyComparator>* list);
     ~MemTableIterator() override = default;
@@ -65,6 +67,9 @@ class Memtable {
     std::string Key() const override;
     std::string Value() const override;
     Status status() const override;
+
+    SequenceNumber Seq() const override;
+    ValueType Type() const override;
 
     const MemtableEntry& Entry() const;
 

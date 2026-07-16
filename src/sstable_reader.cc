@@ -12,7 +12,7 @@ namespace strata {
 
 static constexpr uint64_t kTableMagicNumber = 0x5354524154413031ULL;  // "STRATA01"
 
-class TwoLevelIterator : public Iterator {
+class TwoLevelIterator : public InternalIterator {
  public:
   TwoLevelIterator(std::shared_ptr<SSTableReader> reader, BlockCache* cache)
       : reader_(std::move(reader)),
@@ -87,12 +87,12 @@ class TwoLevelIterator : public Iterator {
     return Status::OK();
   }
 
-  SequenceNumber Seq() const {
+  SequenceNumber Seq() const override {
     assert(Valid());
     return static_cast<Block::Iter*>(data_iter_)->Seq();
   }
 
-  ValueType Type() const {
+  ValueType Type() const override {
     assert(Valid());
     return static_cast<Block::Iter*>(data_iter_)->Type();
   }
@@ -337,7 +337,7 @@ bool SSTableReader::Get(const Slice& user_key, SequenceNumber seq,
   return false;
 }
 
-Iterator* SSTableReader::NewIterator(BlockCache* cache) {
+InternalIterator* SSTableReader::NewIterator(BlockCache* cache) {
   return new TwoLevelIterator(
       std::shared_ptr<SSTableReader>(this, [](SSTableReader*) {}), cache);
 }

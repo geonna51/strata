@@ -29,9 +29,12 @@ set(STRATA_SOURCES
   src/block.cc
   src/block_cache.cc
   src/bloom_filter.cc
+  src/compaction.cc
   src/crc32.cc
   src/db_impl.cc
+  src/db_iterator.cc
   src/memtable.cc
+  src/merging_iterator.cc
   src/sstable_builder.cc
   src/sstable_reader.cc
   src/version_set.cc
