@@ -64,3 +64,11 @@ add_test(NAME sstable_test COMMAND sstable_test)
 add_executable(version_set_test tests/version_set_test.cc)
 target_link_libraries(version_set_test PRIVATE strata)
 add_test(NAME version_set_test COMMAND version_set_test)
+
+add_executable(crash_writer tests/crash_writer.cc)
+target_link_libraries(crash_writer PRIVATE strata)
+
+add_executable(db_bench benchmarks/db_bench.cc)
+target_link_libraries(db_bench PRIVATE strata)
+
+add_test(NAME crash_test COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tests/crash_test.py)
