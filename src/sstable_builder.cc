@@ -7,6 +7,7 @@
 #include "bloom_filter.h"
 #include "coding.h"
 #include "crc32.h"
+#include "env.h"
 
 namespace strata {
 
@@ -158,9 +159,10 @@ Status SSTableBuilder::Finish() {
     offset_ += n;
   }
 
+  status_ = FsyncFile(fd_);
   ::close(fd_);
   closed_ = true;
-  return Status::OK();
+  return status_;
 }
 
 }  // namespace strata

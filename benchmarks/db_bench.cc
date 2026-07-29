@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <iomanip>
 #include <iostream>
@@ -15,17 +16,29 @@ struct BenchmarkStats {
   size_t num_ops = 0;
   size_t bytes = 0;
   double elapsed_seconds = 0.0;
+  std::vector<double> latencies_us;
 
-  void Report() const {
+  void Report() {
     double ops_per_sec = (elapsed_seconds > 0) ? (static_cast<double>(num_ops) / elapsed_seconds) : 0.0;
     double mb_per_sec = (elapsed_seconds > 0) ? (static_cast<double>(bytes) / (1024.0 * 1024.0) / elapsed_seconds) : 0.0;
-    double us_per_op = (num_ops > 0) ? (elapsed_seconds * 1e6 / static_cast<double>(num_ops)) : 0.0;
+    double avg_us = (num_ops > 0) ? (elapsed_seconds * 1e6 / static_cast<double>(num_ops)) : 0.0;
 
-    std::cout << std::left << std::setw(16) << name
-              << ": " << std::right << std::setw(10) << static_cast<size_t>(ops_per_sec) << " ops/sec; "
+    double p50 = avg_us, p95 = avg_us, p99 = avg_us;
+    if (!latencies_us.empty()) {
+      std::sort(latencies_us.begin(), latencies_us.end());
+      size_t n = latencies_us.size();
+      p50 = latencies_us[static_cast<size_t>(n * 0.50)];
+      p95 = latencies_us[static_cast<size_t>(n * 0.95)];
+      p99 = latencies_us[static_cast<size_t>(n * 0.99)];
+    }
+
+    std::cout << std::left << std::setw(14) << name
+              << ": " << std::right << std::setw(9) << static_cast<size_t>(ops_per_sec) << " ops/sec; "
               << std::fixed << std::setprecision(1) << std::setw(6) << mb_per_sec << " MB/s; "
-              << std::setprecision(2) << std::setw(8) << us_per_op << " us/op ("
-              << std::setprecision(3) << elapsed_seconds << " s total)"
+              << "p50: " << std::setprecision(2) << std::setw(6) << p50 << " us; "
+              << "p95: " << std::setprecision(2) << std::setw(6) << p95 << " us; "
+              << "p99: " << std::setprecision(2) << std::setw(6) << p99 << " us ("
+              << std::setprecision(3) << elapsed_seconds << " s)"
               << std::endl;
   }
 };
@@ -50,6 +63,8 @@ class Benchmark {
       BenchmarkReadSeq();
     } else if (bench_name == "readrandom") {
       BenchmarkReadRandom();
+    } else if (bench_name == "readcold") {
+      BenchmarkReadCold();
     } else if (bench_name == "readmissing") {
       BenchmarkReadMissing();
     } else {
@@ -93,10 +108,21 @@ class Benchmark {
     std::string val(val_size_, 'v');
     size_t total_bytes = 0;
 
+    BenchmarkStats stats;
+    stats.name = sync ? "fillsync" : "fillseq";
+    stats.num_ops = num_;
+    stats.latencies_us.reserve(std::min(num_, size_t(100000)));
+
     auto start = std::chrono::high_resolution_clock::now();
     for (size_t i = 0; i < num_; ++i) {
       std::string key = GenerateKey(i);
+      auto op_start = std::chrono::high_resolution_clock::now();
       Status s = db_->Put(key, val);
+      auto op_end = std::chrono::high_resolution_clock::now();
+      if (stats.latencies_us.size() < 100000) {
+        stats.latencies_us.push_back(
+            std::chrono::duration<double, std::micro>(op_end - op_start).count());
+      }
       if (!s.ok()) {
         std::cerr << "Put error: " << s.ToString() << std::endl;
         break;
@@ -105,9 +131,6 @@ class Benchmark {
     }
     auto end = std::chrono::high_resolution_clock::now();
 
-    BenchmarkStats stats;
-    stats.name = sync ? "fillsync" : "fillseq";
-    stats.num_ops = num_;
     stats.bytes = total_bytes;
     stats.elapsed_seconds = std::chrono::duration<double>(end - start).count();
     stats.Report();
@@ -129,18 +152,26 @@ class Benchmark {
     std::string val(val_size_, 'r');
     size_t total_bytes = 0;
 
+    BenchmarkStats stats;
+    stats.name = "fillrandom";
+    stats.num_ops = num_;
+    stats.latencies_us.reserve(std::min(num_, size_t(100000)));
+
     auto start = std::chrono::high_resolution_clock::now();
     for (size_t i = 0; i < num_; ++i) {
       std::string key = GenerateKey(dist(rng));
+      auto op_start = std::chrono::high_resolution_clock::now();
       Status s = db_->Put(key, val);
+      auto op_end = std::chrono::high_resolution_clock::now();
+      if (stats.latencies_us.size() < 100000) {
+        stats.latencies_us.push_back(
+            std::chrono::duration<double, std::micro>(op_end - op_start).count());
+      }
       if (!s.ok()) break;
       total_bytes += key.size() + val.size();
     }
     auto end = std::chrono::high_resolution_clock::now();
 
-    BenchmarkStats stats;
-    stats.name = "fillrandom";
-    stats.num_ops = num_;
     stats.bytes = total_bytes;
     stats.elapsed_seconds = std::chrono::duration<double>(end - start).count();
     stats.Report();
@@ -150,6 +181,9 @@ class Benchmark {
     size_t count = 0;
     size_t total_bytes = 0;
 
+    BenchmarkStats stats;
+    stats.name = "readseq";
+
     auto start = std::chrono::high_resolution_clock::now();
     std::unique_ptr<Iterator> it(db_->NewIterator());
     for (it->SeekToFirst(); it->Valid(); it->Next()) {
@@ -158,8 +192,6 @@ class Benchmark {
     }
     auto end = std::chrono::high_resolution_clock::now();
 
-    BenchmarkStats stats;
-    stats.name = "readseq";
     stats.num_ops = count;
     stats.bytes = total_bytes;
     stats.elapsed_seconds = std::chrono::duration<double>(end - start).count();
@@ -174,10 +206,21 @@ class Benchmark {
     size_t found = 0;
     size_t total_bytes = 0;
 
+    BenchmarkStats stats;
+    stats.name = "readrandom";
+    stats.num_ops = num_;
+    stats.latencies_us.reserve(std::min(num_, size_t(100000)));
+
     auto start = std::chrono::high_resolution_clock::now();
     for (size_t i = 0; i < num_; ++i) {
       std::string key = GenerateKey(dist(rng));
+      auto op_start = std::chrono::high_resolution_clock::now();
       Status s = db_->Get(key, &val);
+      auto op_end = std::chrono::high_resolution_clock::now();
+      if (stats.latencies_us.size() < 100000) {
+        stats.latencies_us.push_back(
+            std::chrono::duration<double, std::micro>(op_end - op_start).count());
+      }
       if (s.ok()) {
         found++;
         total_bytes += key.size() + val.size();
@@ -186,9 +229,45 @@ class Benchmark {
     auto end = std::chrono::high_resolution_clock::now();
     (void)found;
 
+    stats.bytes = total_bytes;
+    stats.elapsed_seconds = std::chrono::duration<double>(end - start).count();
+    stats.Report();
+  }
+
+  void BenchmarkReadCold() {
+    // Reopen DB to flush and purge in-memory caches
+    OpenDB(false, false);
+
+    std::mt19937_64 rng(1337);
+    std::uniform_int_distribution<size_t> dist(0, num_ * 2);
+
+    std::string val;
+    size_t found = 0;
+    size_t total_bytes = 0;
+
     BenchmarkStats stats;
-    stats.name = "readrandom";
+    stats.name = "readcold";
     stats.num_ops = num_;
+    stats.latencies_us.reserve(std::min(num_, size_t(100000)));
+
+    auto start = std::chrono::high_resolution_clock::now();
+    for (size_t i = 0; i < num_; ++i) {
+      std::string key = GenerateKey(dist(rng));
+      auto op_start = std::chrono::high_resolution_clock::now();
+      Status s = db_->Get(key, &val);
+      auto op_end = std::chrono::high_resolution_clock::now();
+      if (stats.latencies_us.size() < 100000) {
+        stats.latencies_us.push_back(
+            std::chrono::duration<double, std::micro>(op_end - op_start).count());
+      }
+      if (s.ok()) {
+        found++;
+        total_bytes += key.size() + val.size();
+      }
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    (void)found;
+
     stats.bytes = total_bytes;
     stats.elapsed_seconds = std::chrono::duration<double>(end - start).count();
     stats.Report();
@@ -198,11 +277,22 @@ class Benchmark {
     std::string val;
     size_t missing = 0;
 
+    BenchmarkStats stats;
+    stats.name = "readmissing";
+    stats.num_ops = num_;
+    stats.latencies_us.reserve(std::min(num_, size_t(100000)));
+
     auto start = std::chrono::high_resolution_clock::now();
     for (size_t i = 0; i < num_; ++i) {
       char buf[32];
       std::snprintf(buf, sizeof(buf), "missing:%010zu", i);
+      auto op_start = std::chrono::high_resolution_clock::now();
       Status s = db_->Get(buf, &val);
+      auto op_end = std::chrono::high_resolution_clock::now();
+      if (stats.latencies_us.size() < 100000) {
+        stats.latencies_us.push_back(
+            std::chrono::duration<double, std::micro>(op_end - op_start).count());
+      }
       if (s.IsNotFound()) {
         missing++;
       }
@@ -210,9 +300,6 @@ class Benchmark {
     auto end = std::chrono::high_resolution_clock::now();
     (void)missing;
 
-    BenchmarkStats stats;
-    stats.name = "readmissing";
-    stats.num_ops = num_;
     stats.bytes = num_ * 16;  // key lookup bytes
     stats.elapsed_seconds = std::chrono::duration<double>(end - start).count();
     stats.Report();
@@ -231,7 +318,7 @@ int main(int argc, char* argv[]) {
   size_t num = 100000;
   size_t val_size = 100;
   std::string dbpath = "/tmp/strata_bench_db";
-  std::string bench_list = "fillseq,fillrandom,readseq,readrandom,readmissing";
+  std::string bench_list = "fillseq,fillrandom,readseq,readrandom,readcold,readmissing";
 
   for (int i = 1; i < argc; ++i) {
     std::string arg = argv[i];
@@ -250,7 +337,7 @@ int main(int argc, char* argv[]) {
   std::cout << "Entries:        " << num << std::endl;
   std::cout << "Value size:     " << val_size << " bytes" << std::endl;
   std::cout << "Raw data size:  " << (num * (val_size + 16) / (1024 * 1024)) << " MB" << std::endl;
-  std::cout << "-----------------------------------------------------------------" << std::endl;
+  std::cout << "--------------------------------------------------------------------------------------------------------" << std::endl;
 
   strata::bench::Benchmark benchmark(dbpath, num, val_size);
 
@@ -263,6 +350,6 @@ int main(int argc, char* argv[]) {
     pos = comma + 1;
   }
 
-  std::cout << "-----------------------------------------------------------------" << std::endl;
+  std::cout << "--------------------------------------------------------------------------------------------------------" << std::endl;
   return 0;
 }

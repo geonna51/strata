@@ -2,6 +2,7 @@
 
 #include <unistd.h>
 #include <algorithm>
+#include "env.h"
 #include "filename.h"
 #include "merging_iterator.h"
 #include "sstable_builder.h"
@@ -26,7 +27,7 @@ bool Compaction::IsBaseLevelForKey(const std::string& user_key,
 
 std::unique_ptr<Compaction> Compaction::PickCompaction(const Options& options,
                                                        VersionSet* vset) {
-  Version* current = vset->current();
+  std::shared_ptr<Version> current = vset->current();
 
   // Check Level 0 file count trigger
   if (current->NumLevelFiles(0) >= options.max_level0_files) {
@@ -103,6 +104,7 @@ Status DoCompaction(const Options& options, const std::string& dbname,
     uint64_t file_size;
     std::string smallest_key;
     std::string largest_key;
+    std::shared_ptr<SSTableReader> reader;
   };
   std::vector<OutputFile> outputs;
 
@@ -125,7 +127,12 @@ Status DoCompaction(const Options& options, const std::string& dbname,
       out.file_size = builder->FileSize();
       out.smallest_key = builder->SmallestKey();
       out.largest_key = builder->LargestKey();
-      outputs.push_back(out);
+
+      std::string path = TableFileName(dbname, current_file_number);
+      Status s_open = SSTableReader::Open(options, path, out.number, out.file_size, &out.reader);
+      if (!s_open.ok()) return s_open;
+
+      outputs.push_back(std::move(out));
     }
     builder.reset();
     return Status::OK();
@@ -148,7 +155,7 @@ Status DoCompaction(const Options& options, const std::string& dbname,
 
       // Handle tombstone dropping if key does not exist in deeper levels
       bool drop = false;
-      if (type == kTypeDeletion && c->IsBaseLevelForKey(key, vset->current())) {
+      if (type == kTypeDeletion && c->IsBaseLevelForKey(key, vset->current().get())) {
         drop = true;
       }
 
@@ -182,7 +189,7 @@ Status DoCompaction(const Options& options, const std::string& dbname,
   }
   for (const auto& out : outputs) {
     edit.AddFile(c->level() + 1, out.number, out.file_size, out.smallest_key,
-                 out.largest_key);
+                 out.largest_key, out.reader);
   }
 
   s = vset->LogAndApply(&edit);
@@ -196,6 +203,7 @@ Status DoCompaction(const Options& options, const std::string& dbname,
     }
   }
 
+  SyncDirectory(dbname);
   return Status::OK();
 }
 

@@ -1,0 +1,96 @@
+name: Strata CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.os }} - ${{ matrix.compiler }} - ${{ matrix.build_type }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        build_type: [Release, Debug]
+        compiler: [gcc, clang]
+        exclude:
+          - os: macos-latest
+            compiler: gcc
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up compiler (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          if [ "${{ matrix.compiler }}" = "gcc" ]; then
+            sudo apt-get install -y g++-12
+            echo "CXX=g++-12" >> $GITHUB_ENV
+            echo "CC=gcc-12" >> $GITHUB_ENV
+          else
+            sudo apt-get install -y clang-15
+            echo "CXX=clang++-15" >> $GITHUB_ENV
+            echo "CC=clang-15" >> $GITHUB_ENV
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Configure CMake
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+
+      - name: Build
+        run: cmake --build build -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
+
+      - name: Run Tests
+        run: ctest --test-dir build --output-on-failure --timeout 60
+
+      - name: Run db_bench Smoke Test
+        run: ./build/db_bench --num=5000 --value_size=64 --benchmarks=fillseq,fillrandom,readseq,readrandom,readmissing
+
+  sanitizers:
+    name: Ubuntu - Clang Sanitizers (ASan / UBSan / TSan)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Clang & Python
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-15 python3
+          echo "CXX=clang++-15" >> $GITHUB_ENV
+          echo "CC=clang-15" >> $GITHUB_ENV
+
+      - name: Configure ASan & UBSan
+        run: |
+          cmake -B build-asan \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DENABLE_SANITIZERS=ON
+
+      - name: Build with ASan & UBSan
+        run: cmake --build build-asan -j$(nproc)
+
+      - name: Run ASan & UBSan Tests
+        run: ctest --test-dir build-asan --output-on-failure --timeout 90
+
+      - name: Configure ThreadSanitizer (TSan)
+        run: |
+          cmake -B build-tsan \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer"
+
+      - name: Build TSan Concurrency Target
+        run: cmake --build build-tsan --target concurrency_test -j$(nproc)
+
+      - name: Run TSan Concurrency Test
+        run: ./build-tsan/concurrency_test
