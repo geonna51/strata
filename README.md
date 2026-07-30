@@ -15,25 +15,49 @@ Traditional databases use B-Trees, where updates write directly into disk pages 
 
 An LSM tree takes the opposite approach: **never do random writes to disk**.
 
-```mermaid
-flowchart TD
-    subgraph WritePath ["The Write Path"]
-        W["db->Put(key, value)"] --> WAL["1. Append to WAL on disk<br/>(CRC32 checksummed)"]
-        W --> Mem["2. Insert into Memtable in RAM<br/>(SkipList sorted by key)"]
-        Mem -->|"Memtable fills up (4MB)"| Imm["3. Freeze as Immutable Memtable"]
-        Imm -->|"Background flush"| L0["4. Flush to Level 0 SSTable on disk"]
-    end
+```
+                              THE WRITE PATH
+                              ==============
 
-    subgraph ReadPath ["The Read Path"]
-        R["db->Get(key, &val)"] --> CheckMem{"1. Check Active Memtable"}
-        CheckMem -->|"Found"| Return["Return Value"]
-        CheckMem -->|"Not in RAM"| CheckImm{"2. Check Immutable Memtable"}
-        CheckImm -->|"Found"| Return
-        CheckImm -->|"Not in RAM"| CheckDisk{"3. Check Disk SSTables (L0 to L6)"}
-        CheckDisk -->|"Bloom Filter says NO"| Skip["Skip file (zero disk I/O)"]
-        CheckDisk -->|"Bloom Filter says YES"| ReadBlock["Read 4KB block from disk<br/>(Check LRU cache first)"]
-        ReadBlock --> Return
-    end
+  Client: db->Put(key, value)
+    │
+    ├─► 1. Append record to Write-Ahead Log (WAL) on disk (CRC32 checksummed)
+    │
+    └─► 2. Insert into Active Memtable in RAM (SkipList sorted by user key)
+          │
+          │ (When Memtable reaches 4MB write buffer capacity)
+          ▼
+        3. Freeze Active Memtable into an Immutable Memtable
+          │
+          │ (Background worker thread flushes to disk)
+          ▼
+        4. Flush to Level 0 SSTable file on disk
+          │
+          │ (When Level 0 accumulates >= 4 files)
+          ▼
+        5. Background Compaction merges sorted runs into Level 1..6
+           Purges overwritten keys and dropped tombstones
+
+
+                              THE READ PATH
+                              =============
+
+  Client: db->Get(key, &value)
+    │
+    ├─► 1. Check Active Memtable in RAM ───────────────► Found? Return value
+    │
+    ├─► 2. Check Immutable Memtable in RAM ────────────► Found? Return value
+    │
+    └─► 3. Search Disk SSTables (Level 0 down to Level 6)
+          │
+          ├──► Check Bloom Filter first (~80 ns bitset check)
+          │      └─► Absent? Skip file completely (ZERO disk I/O)
+          │
+          ├──► Check LRU Block Cache (64MB)
+          │      └─► Cache Hit? Return 4KB block without reading disk
+          │
+          └──► Read 4KB Data Block from Disk
+                 └─► Binary search block restart array ──► Return value
 ```
 
 1. **Writes are fast (~3 µs)**: Every `Put()` is appended to an on-disk Write-Ahead Log (WAL) and inserted into an in-memory SkipList (Memtable). No disk seeks.
