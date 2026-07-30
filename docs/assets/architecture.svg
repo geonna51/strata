@@ -1,0 +1,209 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 620" width="100%" height="100%" style="background-color: #0d1117; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <defs>
+    <linearGradient id="grad-bg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#161b22"/>
+      <stop offset="100%" stop-color="#0d1117"/>
+    </linearGradient>
+    <linearGradient id="grad-api" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1f6feb" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#388bfd" stop-opacity="0.1"/>
+    </linearGradient>
+    <linearGradient id="grad-mem" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#238636" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#2ea043" stop-opacity="0.1"/>
+    </linearGradient>
+    <linearGradient id="grad-wal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d29922" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#e3b341" stop-opacity="0.1"/>
+    </linearGradient>
+    <linearGradient id="grad-disk" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8957e5" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#a371f7" stop-opacity="0.1"/>
+    </linearGradient>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#010409" flood-opacity="0.7"/>
+    </filter>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M 0 0 L 8 4 L 0 8 z" fill="#58a6ff"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M 0 0 L 8 4 L 0 8 z" fill="#3fb950"/>
+    </marker>
+    <marker id="arrow-orange" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M 0 0 L 8 4 L 0 8 z" fill="#e3b341"/>
+    </marker>
+    <marker id="arrow-purple" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M 0 0 L 8 4 L 0 8 z" fill="#bc8cff"/>
+    </marker>
+  </defs>
+
+  <!-- Title & Subtitle -->
+  <text x="480" y="36" text-anchor="middle" font-size="20" font-weight="700" fill="#f0f6fc" letter-spacing="0.5">STRATA LSM-TREE ARCHITECTURE</text>
+  <text x="480" y="58" text-anchor="middle" font-size="12" fill="#8b949e">Concurrent SkipList &bull; CRC32 Write-Ahead Log &bull; Multi-Level SSTable Compaction &bull; Manifest Versioning</text>
+
+  <!-- 1. Client Layer -->
+  <g transform="translate(50, 75)">
+    <rect x="0" y="0" width="860" height="52" rx="8" fill="url(#grad-api)" stroke="#1f6feb" stroke-width="1.5" filter="url(#shadow)"/>
+    <text x="24" y="32" font-size="14" font-weight="700" fill="#58a6ff">CLIENT API</text>
+    <rect x="130" y="12" width="140" height="28" rx="5" fill="#161b22" stroke="#30363d"/>
+    <text x="200" y="30" text-anchor="middle" font-size="12" font-weight="600" fill="#f0f6fc">db->Put(k, v)</text>
+
+    <rect x="285" y="12" width="140" height="28" rx="5" fill="#161b22" stroke="#30363d"/>
+    <text x="355" y="30" text-anchor="middle" font-size="12" font-weight="600" fill="#f0f6fc">db->Get(k, &amp;v)</text>
+
+    <rect x="440" y="12" width="140" height="28" rx="5" fill="#161b22" stroke="#30363d"/>
+    <text x="510" y="30" text-anchor="middle" font-size="12" font-weight="600" fill="#f0f6fc">db->Delete(k)</text>
+
+    <rect x="595" y="12" width="160" height="28" rx="5" fill="#161b22" stroke="#30363d"/>
+    <text x="675" y="30" text-anchor="middle" font-size="12" font-weight="600" fill="#f0f6fc">db->NewIterator()</text>
+
+    <text x="840" y="31" text-anchor="end" font-size="11" fill="#8b949e">C++17 API</text>
+  </g>
+
+  <!-- Flow Arrows from Client to RAM and WAL -->
+  <path d="M 200 127 L 200 162" fill="none" stroke="#e3b341" stroke-width="2" marker-end="url(#arrow-orange)"/>
+  <path d="M 420 127 L 420 162" fill="none" stroke="#3fb950" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <path d="M 720 127 L 720 338" fill="none" stroke="#58a6ff" stroke-width="2" stroke-dasharray="4 4" marker-end="url(#arrow-blue)"/>
+
+  <!-- 2. Memory & WAL Layer (Y: 170 to 320) -->
+  <!-- Left Side: In-Memory Active & Immutable Memtables -->
+  <g transform="translate(50, 170)">
+    <rect x="0" y="0" width="490" height="145" rx="8" fill="url(#grad-mem)" stroke="#238636" stroke-width="1.5" filter="url(#shadow)"/>
+    <text x="20" y="25" font-size="13" font-weight="700" fill="#3fb950">IN-MEMORY BUFFER (DRAM)</text>
+
+    <!-- Active Memtable Box -->
+    <g transform="translate(20, 40)">
+      <rect x="0" y="0" width="210" height="85" rx="6" fill="#161b22" stroke="#30363d"/>
+      <text x="105" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#f0f6fc">Active Memtable</text>
+      <text x="105" y="42" text-anchor="middle" font-size="11" fill="#8b949e">Lock-Free SkipList</text>
+      <text x="105" y="60" text-anchor="middle" font-size="11" fill="#58a6ff">Capacity: 4 MB</text>
+      <text x="105" y="76" text-anchor="middle" font-size="10" fill="#7ee787">Fast concurrent writes</text>
+    </g>
+
+    <!-- Transition Arrow -->
+    <path d="M 235 82 L 265 82" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+    <text x="250" y="74" text-anchor="middle" font-size="9" fill="#8b949e">Full</text>
+
+    <!-- Immutable Memtable Box -->
+    <g transform="translate(270, 40)">
+      <rect x="0" y="0" width="200" height="85" rx="6" fill="#161b22" stroke="#30363d"/>
+      <text x="100" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#f0f6fc">Immutable Memtable</text>
+      <text x="100" y="42" text-anchor="middle" font-size="11" fill="#8b949e">Read-Only Snapshot</text>
+      <text x="100" y="60" text-anchor="middle" font-size="11" fill="#e3b341">Awaiting Minor Flush</text>
+      <text x="100" y="76" text-anchor="middle" font-size="10" fill="#8b949e">Served during writes</text>
+    </g>
+  </g>
+
+  <!-- Right Side: Write-Ahead Log (WAL) on Disk -->
+  <g transform="translate(560, 170)">
+    <rect x="0" y="0" width="350" height="145" rx="8" fill="url(#grad-wal)" stroke="#d29922" stroke-width="1.5" filter="url(#shadow)"/>
+    <text x="20" y="25" font-size="13" font-weight="700" fill="#e3b341">WRITE-AHEAD LOG (WAL)</text>
+    <rect x="230" y="10" width="105" height="20" rx="3" fill="#21262d" stroke="#30363d"/>
+    <text x="282" y="24" text-anchor="middle" font-size="10" font-weight="600" fill="#e3b341">DISK APPEND-ONLY</text>
+
+    <g transform="translate(20, 40)">
+      <rect x="0" y="0" width="310" height="85" rx="6" fill="#161b22" stroke="#30363d"/>
+      <text x="155" y="22" text-anchor="middle" font-size="12" font-weight="600" fill="#f0f6fc">8-Byte Frame Header + Payload</text>
+
+      <!-- Frame Visual -->
+      <g transform="translate(15, 33)">
+        <rect x="0" y="0" width="65" height="22" rx="3" fill="#21262d" stroke="#388bfd" stroke-width="1"/>
+        <text x="32" y="15" text-anchor="middle" font-size="10" fill="#58a6ff">CRC32 4B</text>
+
+        <rect x="70" y="0" width="60" height="22" rx="3" fill="#21262d" stroke="#388bfd" stroke-width="1"/>
+        <text x="100" y="15" text-anchor="middle" font-size="10" fill="#58a6ff">Len 4B</text>
+
+        <rect x="135" y="0" width="40" height="22" rx="3" fill="#21262d" stroke="#3fb950" stroke-width="1"/>
+        <text x="155" y="15" text-anchor="middle" font-size="10" fill="#3fb950">Type</text>
+
+        <rect x="180" y="0" width="45" height="22" rx="3" fill="#21262d" stroke="#3fb950" stroke-width="1"/>
+        <text x="202" y="15" text-anchor="middle" font-size="10" fill="#3fb950">Seq 8B</text>
+
+        <rect x="230" y="0" width="50" height="22" rx="3" fill="#21262d" stroke="#e3b341" stroke-width="1"/>
+        <text x="255" y="15" text-anchor="middle" font-size="10" fill="#e3b341">Key/Val</text>
+      </g>
+      <text x="155" y="74" text-anchor="middle" font-size="10" fill="#8b949e">Zero data loss &bull; Strict torn-write / EOF validation</text>
+    </g>
+  </g>
+
+  <!-- Flush Arrow from Immutable Memtable to L0 -->
+  <path d="M 420 315 L 420 365" fill="none" stroke="#3fb950" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <rect x="350" y="330" width="140" height="20" rx="3" fill="#161b22" stroke="#238636"/>
+  <text x="420" y="344" text-anchor="middle" font-size="10" font-weight="600" fill="#3fb950">Flush (Minor Compaction)</text>
+
+  <!-- 3. LSM Storage Hierarchy Layer (Y: 370 to 600) -->
+  <g transform="translate(50, 370)">
+    <rect x="0" y="0" width="860" height="225" rx="8" fill="url(#grad-disk)" stroke="#8957e5" stroke-width="1.5" filter="url(#shadow)"/>
+    <text x="20" y="25" font-size="13" font-weight="700" fill="#bc8cff">MULTI-LEVEL ON-DISK STORAGE &amp; COMPACTION (SSTABLES)</text>
+    <rect x="710" y="10" width="135" height="20" rx="3" fill="#21262d" stroke="#30363d"/>
+    <text x="777" y="24" text-anchor="middle" font-size="10" font-weight="600" fill="#bc8cff">MANIFEST-DRIVEN</text>
+
+    <!-- Cache & Filter row inside storage -->
+    <g transform="translate(20, 38)">
+      <rect x="0" y="0" width="400" height="36" rx="5" fill="#161b22" stroke="#30363d"/>
+      <text x="15" y="23" font-size="11" font-weight="600" fill="#7ee787">Bloom Filter (10 bits/key):</text>
+      <text x="180" y="23" font-size="11" fill="#c9d1d9">Negative probe bypasses disk I/O (~1% FPR)</text>
+
+      <rect x="420" y="0" width="400" height="36" rx="5" fill="#161b22" stroke="#30363d"/>
+      <text x="435" y="23" font-size="11" font-weight="600" fill="#58a6ff">LRU Block Cache (8MB):</text>
+      <text x="595" y="23" font-size="11" fill="#c9d1d9">Shared uncompressed data blocks</text>
+    </g>
+
+    <!-- Levels Display -->
+    <!-- Level 0 Box -->
+    <g transform="translate(20, 88)">
+      <rect x="0" y="0" width="820" height="52" rx="6" fill="#161b22" stroke="#30363d"/>
+      <text x="15" y="31" font-size="12" font-weight="700" fill="#f0f6fc">Level 0</text>
+      <text x="68" y="31" font-size="11" fill="#8b949e">(Overlapping)</text>
+
+      <!-- L0 files -->
+      <g transform="translate(160, 10)">
+        <rect x="0" y="0" width="130" height="32" rx="4" fill="#21262d" stroke="#f85149" stroke-width="1"/>
+        <text x="65" y="20" text-anchor="middle" font-size="11" fill="#f0f6fc">000004.sst (youngest)</text>
+
+        <rect x="145" y="0" width="110" height="32" rx="4" fill="#21262d" stroke="#f85149" stroke-width="1"/>
+        <text x="200" y="20" text-anchor="middle" font-size="11" fill="#f0f6fc">000003.sst</text>
+
+        <rect x="270" y="0" width="110" height="32" rx="4" fill="#21262d" stroke="#f85149" stroke-width="1"/>
+        <text x="325" y="20" text-anchor="middle" font-size="11" fill="#f0f6fc">000002.sst</text>
+
+        <rect x="395" y="0" width="125" height="32" rx="4" fill="#21262d" stroke="#f85149" stroke-width="1"/>
+        <text x="457" y="20" text-anchor="middle" font-size="11" fill="#f0f6fc">000001.sst (oldest)</text>
+
+        <text x="545" y="20" font-size="10" fill="#8b949e">Trigger: &gt;= 4 files &rarr; Compaction to L1</text>
+      </g>
+    </g>
+
+    <!-- Downward Compaction Flow Arrow -->
+    <path d="M 430 142 L 430 154" fill="none" stroke="#bc8cff" stroke-width="2" marker-end="url(#arrow-purple)"/>
+
+    <!-- Level 1..5 Box -->
+    <g transform="translate(20, 156)">
+      <rect x="0" y="0" width="820" height="56" rx="6" fill="#161b22" stroke="#30363d"/>
+      <text x="15" y="32" font-size="12" font-weight="700" fill="#f0f6fc">Level 1 &ndash; 5</text>
+      <text x="95" y="32" font-size="11" fill="#8b949e">(Partitioned)</text>
+
+      <!-- Non-overlapping sorted files -->
+      <g transform="translate(180, 10)">
+        <rect x="0" y="0" width="100" height="36" rx="4" fill="#21262d" stroke="#388bfd" stroke-width="1"/>
+        <text x="50" y="18" text-anchor="middle" font-size="11" font-weight="600" fill="#f0f6fc">[a &bull;&bull;&bull; d]</text>
+        <text x="50" y="30" text-anchor="middle" font-size="9" fill="#8b949e">000005.sst</text>
+
+        <rect x="115" y="0" width="100" height="36" rx="4" fill="#21262d" stroke="#388bfd" stroke-width="1"/>
+        <text x="165" y="18" text-anchor="middle" font-size="11" font-weight="600" fill="#f0f6fc">[e &bull;&bull;&bull; m]</text>
+        <text x="165" y="30" text-anchor="middle" font-size="9" fill="#8b949e">000006.sst</text>
+
+        <rect x="230" y="0" width="100" height="36" rx="4" fill="#21262d" stroke="#388bfd" stroke-width="1"/>
+        <text x="280" y="18" text-anchor="middle" font-size="11" font-weight="600" fill="#f0f6fc">[n &bull;&bull;&bull; s]</text>
+        <text x="280" y="30" text-anchor="middle" font-size="9" fill="#8b949e">000007.sst</text>
+
+        <rect x="345" y="0" width="100" height="36" rx="4" fill="#21262d" stroke="#388bfd" stroke-width="1"/>
+        <text x="395" y="18" text-anchor="middle" font-size="11" font-weight="600" fill="#f0f6fc">[t &bull;&bull;&bull; z]</text>
+        <text x="395" y="30" text-anchor="middle" font-size="9" fill="#8b949e">000008.sst</text>
+
+        <text x="465" y="22" font-size="11" fill="#8b949e">Non-overlapping keys &bull; Binary search across file index</text>
+        <text x="465" y="34" font-size="10" fill="#3fb950">Purges overwritten values &amp; tombstones during N-way merge</text>
+      </g>
+    </g>
+  </g>
+</svg>

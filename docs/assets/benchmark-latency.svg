@@ -70,7 +70,7 @@
 
     <!-- Group 3: Read Cold / Disk (p50: 0.67us=25px, p95: 1.08us=40px, p99: 13.62us=508px) -->
     <g transform="translate(0, 105)">
-      <text x="-15" y="28" text-anchor="end" font-size="12" font-weight="600" fill="#bc8cff">Read Cold (Disk)</text>
+      <text x="-15" y="28" text-anchor="end" font-size="12" font-weight="600" fill="#bc8cff">Read (Cold Cache)</text>
       <rect x="0" y="2" width="25" height="12" rx="3" fill="#388bfd"/>
       <text x="33" y="12" font-size="10" fill="#8b949e">0.67 µs</text>
 

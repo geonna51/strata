@@ -152,15 +152,30 @@ Status WalReader::ReadRecord(SequenceNumber* seq, ValueType* type,
     bytes_read += n;
   }
 
+  auto IsAtEof = [this]() -> bool {
+    struct stat st;
+    if (::fstat(fd_, &st) != 0) {
+      return false;
+    }
+    off_t cur = ::lseek(fd_, 0, SEEK_CUR);
+    if (cur < 0) {
+      return false;
+    }
+    return cur >= st.st_size;
+  };
+
   uint32_t expected_crc = DecodeFixed32(header);
   uint32_t length = DecodeFixed32(header + 4);
 
   static constexpr uint32_t kMaxRecordSize = 64 * 1024 * 1024;  // 64MB limit
   if (length > kMaxRecordSize) {
-    if (allow_partial_eof) {
-      return Status::NotFound("Invalid WAL record length at EOF");
+    struct stat st;
+    bool at_or_past_eof = (::fstat(fd_, &st) == 0 &&
+                           static_cast<uint64_t>(::lseek(fd_, 0, SEEK_CUR)) + length > static_cast<uint64_t>(st.st_size));
+    if (allow_partial_eof && at_or_past_eof) {
+      return Status::NotFound("Corrupt trailing record at EOF");
     }
-    return Status::Corruption("WAL record length exceeds maximum allowed size");
+    return Status::Corruption("WAL record length exceeds maximum allowed size: " + std::to_string(length));
   }
 
   std::string payload;
@@ -184,10 +199,14 @@ Status WalReader::ReadRecord(SequenceNumber* seq, ValueType* type,
 
   uint32_t actual_crc = Crc32(payload.data(), payload.size());
   if (actual_crc != expected_crc) {
-    if (allow_partial_eof) {
+    bool at_eof = IsAtEof();
+    if (allow_partial_eof && at_eof) {
       return Status::NotFound("Corrupt trailing record at EOF");
     }
-    return Status::Corruption("WAL CRC mismatch");
+    if (!at_eof) {
+      return Status::Corruption("WAL CRC mismatch in middle of log file: " + filename_);
+    }
+    return Status::Corruption("WAL CRC mismatch: " + filename_);
   }
 
   // Parse payload: [type: 1B] [seq: 8B] [klen: 4B] [key] [vlen: 4B] [val]

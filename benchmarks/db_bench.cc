@@ -24,23 +24,29 @@ struct BenchmarkStats {
     double mb_per_sec = (elapsed_seconds > 0) ? (static_cast<double>(bytes) / (1024.0 * 1024.0) / elapsed_seconds) : 0.0;
     double avg_us = (num_ops > 0) ? (elapsed_seconds * 1e6 / static_cast<double>(num_ops)) : 0.0;
 
-    double p50 = avg_us, p95 = avg_us, p99 = avg_us;
     if (!latencies_us.empty()) {
       std::sort(latencies_us.begin(), latencies_us.end());
       size_t n = latencies_us.size();
-      p50 = latencies_us[static_cast<size_t>(n * 0.50)];
-      p95 = latencies_us[static_cast<size_t>(n * 0.95)];
-      p99 = latencies_us[static_cast<size_t>(n * 0.99)];
-    }
+      double p50 = latencies_us[static_cast<size_t>(n * 0.50)];
+      double p95 = latencies_us[static_cast<size_t>(n * 0.95)];
+      double p99 = latencies_us[static_cast<size_t>(n * 0.99)];
 
-    std::cout << std::left << std::setw(14) << name
-              << ": " << std::right << std::setw(9) << static_cast<size_t>(ops_per_sec) << " ops/sec; "
-              << std::fixed << std::setprecision(1) << std::setw(6) << mb_per_sec << " MB/s; "
-              << "p50: " << std::setprecision(2) << std::setw(6) << p50 << " us; "
-              << "p95: " << std::setprecision(2) << std::setw(6) << p95 << " us; "
-              << "p99: " << std::setprecision(2) << std::setw(6) << p99 << " us ("
-              << std::setprecision(3) << elapsed_seconds << " s)"
-              << std::endl;
+      std::cout << std::left << std::setw(14) << name
+                << ": " << std::right << std::setw(9) << static_cast<size_t>(ops_per_sec) << " ops/sec; "
+                << std::fixed << std::setprecision(1) << std::setw(6) << mb_per_sec << " MB/s; "
+                << "p50: " << std::setprecision(2) << std::setw(6) << p50 << " us; "
+                << "p95: " << std::setprecision(2) << std::setw(6) << p95 << " us; "
+                << "p99: " << std::setprecision(2) << std::setw(6) << p99 << " us ("
+                << std::setprecision(3) << elapsed_seconds << " s)"
+                << std::endl;
+    } else {
+      std::cout << std::left << std::setw(14) << name
+                << ": " << std::right << std::setw(9) << static_cast<size_t>(ops_per_sec) << " ops/sec; "
+                << std::fixed << std::setprecision(1) << std::setw(6) << mb_per_sec << " MB/s; "
+                << "avg: " << std::setprecision(2) << std::setw(6) << avg_us << " us/entry ("
+                << std::setprecision(3) << elapsed_seconds << " s)"
+                << std::endl;
+    }
   }
 };
 
@@ -64,8 +70,8 @@ class Benchmark {
       BenchmarkReadSeq();
     } else if (bench_name == "readrandom") {
       BenchmarkReadRandom();
-    } else if (bench_name == "readcold") {
-      BenchmarkReadCold();
+    } else if (bench_name == "readreopen" || bench_name == "readcold" || bench_name == "readnocache") {
+      BenchmarkReadReopen();
     } else if (bench_name == "readmissing") {
       BenchmarkReadMissing();
     } else {
@@ -240,8 +246,9 @@ class Benchmark {
     stats.Report();
   }
 
-  void BenchmarkReadCold() {
-    // Reopen DB to flush and purge in-memory caches
+  void BenchmarkReadReopen() {
+    // Reopen DB to flush memtable and clear in-memory Strata block cache
+    // (Note: OS page cache remains warm, testing engine overhead without Strata block cache)
     OpenDB(false, false);
 
     std::mt19937_64 rng(1337);
@@ -252,7 +259,7 @@ class Benchmark {
     size_t total_bytes = 0;
 
     BenchmarkStats stats;
-    stats.name = "readcold";
+    stats.name = "readreopen";
     stats.num_ops = num_;
     stats.latencies_us.reserve(std::min(num_, size_t(100000)));
 
@@ -324,7 +331,7 @@ int main(int argc, char* argv[]) {
   size_t num = 100000;
   size_t val_size = 100;
   std::string dbpath = "/tmp/strata_bench_db";
-  std::string bench_list = "fillseq,fillrandom,readseq,readrandom,readcold,readmissing";
+  std::string bench_list = "fillseq,fillrandom,readseq,readrandom,readreopen,readmissing";
 
   for (int i = 1; i < argc; ++i) {
     std::string arg = argv[i];

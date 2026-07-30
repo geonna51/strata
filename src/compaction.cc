@@ -179,6 +179,9 @@ Status DoCompaction(const Options& options, const std::string& dbname,
   Status s = FinishOutputFile();
   if (!s.ok()) return s;
 
+  // Ensure directory entries for new SSTables are durable before MANIFEST references them
+  SyncDirectory(dbname);
+
   // Build VersionEdit
   VersionEdit edit;
   for (const auto& f : c->inputs(0)) {
