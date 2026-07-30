@@ -1,7 +1,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <iostream>
+#include <memory>
 #include <string>
+#include <vector>
 #include "test_util.h"
 #include "version_set.h"
 

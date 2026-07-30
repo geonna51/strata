@@ -3,7 +3,9 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <string>
+#include <vector>
 #include "strata/db.h"
 #include "strata/options.h"
 
