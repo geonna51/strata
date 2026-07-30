@@ -1,5 +1,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
+#include <atomic>
 #include <chrono>
 #include <iostream>
 #include <string>
@@ -13,7 +14,7 @@ namespace {
 void TestDBBasicPutGetDelete() {
   std::cout << "Running TestDBBasicPutGetDelete..." << std::endl;
   std::string dbpath = "/tmp/strata_test_db_basic";
-  system(("rm -rf " + dbpath).c_str());
+  CleanDir(dbpath);
 
   strata::Options options;
   options.create_if_missing = true;
@@ -35,13 +36,13 @@ void TestDBBasicPutGetDelete() {
   ASSERT_NOT_FOUND(db->Get("user:123", &val));
 
   delete db;
-  system(("rm -rf " + dbpath).c_str());
+  CleanDir(dbpath);
 }
 
 void TestDBOverwritesAndOrdering() {
   std::cout << "Running TestDBOverwritesAndOrdering..." << std::endl;
   std::string dbpath = "/tmp/strata_test_db_overwrites";
-  system(("rm -rf " + dbpath).c_str());
+  CleanDir(dbpath);
 
   strata::Options options;
   options.create_if_missing = true;
@@ -67,13 +68,13 @@ void TestDBOverwritesAndOrdering() {
   ASSERT_EQ(val, "B");
 
   delete db;
-  system(("rm -rf " + dbpath).c_str());
+  CleanDir(dbpath);
 }
 
 void TestDBIterators() {
   std::cout << "Running TestDBIterators..." << std::endl;
   std::string dbpath = "/tmp/strata_test_db_iter";
-  system(("rm -rf " + dbpath).c_str());
+  CleanDir(dbpath);
 
   strata::Options options;
   options.create_if_missing = true;
@@ -124,13 +125,13 @@ void TestDBIterators() {
   ASSERT_EQ(results[1].second, "Charlie");
 
   delete db;
-  system(("rm -rf " + dbpath).c_str());
+  CleanDir(dbpath);
 }
 
 void TestDBPersistenceAndRestart() {
   std::cout << "Running TestDBPersistenceAndRestart..." << std::endl;
   std::string dbpath = "/tmp/strata_test_db_restart";
-  system(("rm -rf " + dbpath).c_str());
+  CleanDir(dbpath);
 
   strata::Options options;
   options.create_if_missing = true;
@@ -158,13 +159,13 @@ void TestDBPersistenceAndRestart() {
     delete db;
   }
 
-  system(("rm -rf " + dbpath).c_str());
+  CleanDir(dbpath);
 }
 
 void TestDBConcurrentReadWrite() {
   std::cout << "Running TestDBConcurrentReadWrite..." << std::endl;
   std::string dbpath = "/tmp/strata_test_db_concurrent";
-  system(("rm -rf " + dbpath).c_str());
+  CleanDir(dbpath);
 
   strata::Options options;
   options.create_if_missing = true;
@@ -202,7 +203,7 @@ void TestDBConcurrentReadWrite() {
   }
 
   delete db;
-  system(("rm -rf " + dbpath).c_str());
+  CleanDir(dbpath);
 }
 
 }  // namespace

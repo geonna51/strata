@@ -14,7 +14,7 @@ namespace {
 void RunConcurrencyTorture() {
   std::cout << "Starting Concurrency Torture Test: 8 Readers, 1 Continuous Writer, Constant Compaction..." << std::endl;
   std::string dbpath = "/tmp/strata_concurrency_torture_db";
-  system(("rm -rf " + dbpath).c_str());
+  CleanDir(dbpath);
 
   strata::Options options;
   options.create_if_missing = true;
@@ -143,7 +143,7 @@ void RunConcurrencyTorture() {
   ASSERT_TRUE(total_scans.load() > 1000);
 
   delete db;
-  system(("rm -rf " + dbpath).c_str());
+  CleanDir(dbpath);
   std::cout << "PASS: Concurrency torture test passed with 0 lifetime or consistency errors." << std::endl;
 }
 

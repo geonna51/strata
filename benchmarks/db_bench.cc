@@ -73,6 +73,11 @@ class Benchmark {
   }
 
  private:
+  static void CleanDir(const std::string& path) {
+    int rc = ::system(("rm -rf " + path).c_str());
+    (void)rc;
+  }
+
   std::string GenerateKey(size_t i) {
     char buf[32];
     std::snprintf(buf, sizeof(buf), "key:%010zu", i);
@@ -100,7 +105,7 @@ class Benchmark {
 
   void BenchmarkFillSeq(bool sync) {
     std::string test_dir = dbpath_ + (sync ? "_sync" : "_seq");
-    system(("rm -rf " + test_dir).c_str());
+    CleanDir(test_dir);
 
     dbpath_ = test_dir;
     OpenDB(sync, true);
@@ -141,7 +146,7 @@ class Benchmark {
 
   void BenchmarkFillRandom() {
     std::string test_dir = dbpath_ + "_rand";
-    system(("rm -rf " + test_dir).c_str());
+    CleanDir(test_dir);
 
     dbpath_ = test_dir;
     OpenDB(false, true);

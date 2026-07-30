@@ -53,10 +53,17 @@ namespace test {
     const auto& _status_eval = (status);                                       \
     if (!_status_eval.IsNotFound()) {                                          \
       std::cerr << __FILE__ << ":" << __LINE__ << ": Expected NotFound, got: "\
-                << _status_eval.ToString() << std::endl;                       \
+      << _status_eval.ToString() << std::endl;                                 \
       std::abort();                                                            \
     }                                                                          \
   } while (0)
 
+inline void CleanDir(const std::string& path) {
+  int rc = ::system(("rm -rf " + path).c_str());
+  (void)rc;
+}
+
 }  // namespace test
 }  // namespace strata
+
+using strata::test::CleanDir;

@@ -55,7 +55,7 @@ void TestVersionEditEncodeDecode() {
 void TestVersionSetLogApplyAndRecover() {
   std::cout << "Running TestVersionSetLogApplyAndRecover..." << std::endl;
   std::string dbpath = "/tmp/strata_test_version_set_dir";
-  system(("rm -rf " + dbpath).c_str());
+  CleanDir(dbpath);
   ::mkdir(dbpath.c_str(), 0755);
 
   strata::Options options;
@@ -105,7 +105,7 @@ void TestVersionSetLogApplyAndRecover() {
     ASSERT_EQ(l1[1].number, 6);
   }
 
-  system(("rm -rf " + dbpath).c_str());
+  CleanDir(dbpath);
 }
 
 }  // namespace
