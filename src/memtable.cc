@@ -54,13 +54,14 @@ size_t Memtable::ApproximateMemoryUsage() const {
   return memory_usage_.load(std::memory_order_relaxed);
 }
 
-Memtable::MemTableIterator* Memtable::NewIterator() {
-  return new MemTableIterator(&table_);
+Memtable::MemTableIterator* Memtable::NewIterator(std::shared_ptr<Memtable> pin) {
+  return new MemTableIterator(&table_, std::move(pin));
 }
 
 Memtable::MemTableIterator::MemTableIterator(
-    const SkipList<MemtableEntry, MemtableKeyComparator>* list)
-    : iter_(list) {}
+    const SkipList<MemtableEntry, MemtableKeyComparator>* list,
+    std::shared_ptr<Memtable> pin)
+    : pin_(std::move(pin)), iter_(list) {}
 
 bool Memtable::MemTableIterator::Valid() const {
   return iter_.Valid();

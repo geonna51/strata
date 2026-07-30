@@ -280,9 +280,9 @@ Iterator* DBImpl::NewIterator() {
   }
 
   std::vector<std::unique_ptr<InternalIterator>> iters;
-  iters.emplace_back(mem->NewIterator());
+  iters.emplace_back(mem->NewIterator(mem));
   if (imm) {
-    iters.emplace_back(imm->NewIterator());
+    iters.emplace_back(imm->NewIterator(imm));
   }
 
   std::vector<Iterator*> table_iters;
@@ -293,7 +293,7 @@ Iterator* DBImpl::NewIterator() {
 
   std::unique_ptr<InternalIterator> merging_iter(
       NewMergingIterator(std::move(iters)));
-  return new DBIterator(std::move(merging_iter), seq, current_v);
+  return new DBIterator(std::move(merging_iter), seq, current_v, mem, imm);
 }
 
 Status DBImpl::FlushMemTable() {

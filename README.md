@@ -15,49 +15,112 @@ Traditional databases use B-Trees, where updates write directly into disk pages 
 
 An LSM tree takes the opposite approach: **never do random writes to disk**.
 
+### The Write Path (Append & In-Memory Pipeline)
+
 ```
-                              THE WRITE PATH
-                              ==============
++-----------------------------------------------------------------------------+
+|                                 CLIENT                                      |
+|                       db->Put(key, value) / Delete()                        |
++-----------------------------------------------------------------------------+
+               |                                            |
+               | (1) Synchronous Append                     | (2) In-Memory Insert
+               v                                            v
++-----------------------------+              +-----------------------------+
+|       WRITE-AHEAD LOG       |              |       ACTIVE MEMTABLE       |
+|       (WAL on Disk)         |              |          (In RAM)           |
+|                             |              |                             |
+|  - Append-only sequential   |              |  - Concurrent SkipList      |
+|  - CRC32 checksummed frames |              |  - Sorted by key & seq      |
+|  - Torn-write safe on crash |              |  - Lock-free reader access  |
++-----------------------------+              +-----------------------------+
+                                                            |
+                                                            | (3) Buffer Full (4MB)
+                                                            v
+                                             +-----------------------------+
+                                             |     IMMUTABLE MEMTABLE      |
+                                             |          (In RAM)           |
+                                             |  - Read-only snapshot       |
+                                             |  - Awaiting flush to disk   |
+                                             +-----------------------------+
+                                                            |
+                                                            | (4) Minor Compaction
+                                                            |     (Sequential Write)
+                                                            v
+============================= DISK STORAGE ====================================
++-----------------------------------------------------------------------------+
+|                                LEVEL 0                                      |
+|    +-------------------+   +-------------------+   +-------------------+    |
+|    |    000001.sst     |   |    000002.sst     |   |    000003.sst     |    |
+|    |   [apple..zebra]  |   |   [banana..mango] |   |   [cherry..peach] |    |
+|    +-------------------+   +-------------------+   +-------------------+    |
+|                    (Overlapping user key ranges)                            |
++-----------------------------------------------------------------------------+
+                                       |
+                                       | (5) Major Compaction (>= 4 files in L0)
+                                       |     K-way Merge Sort & Tombstone Purge
+                                       v
++-----------------------------------------------------------------------------+
+|                             LEVEL 1 .. LEVEL 6                              |
+|    +-------------------+   +-------------------+   +-------------------+    |
+|    |    000004.sst     |   |    000005.sst     |   |    000006.sst     |    |
+|    |    [a .. f]       |   |    [g .. m]       |   |    [n .. z]       |    |
+|    +-------------------+   +-------------------+   +-------------------+    |
+|                  (Strictly partitioned, non-overlapping)                    |
++-----------------------------------------------------------------------------+
+```
 
-  Client: db->Put(key, value)
-    │
-    ├─► 1. Append record to Write-Ahead Log (WAL) on disk (CRC32 checksummed)
-    │
-    └─► 2. Insert into Active Memtable in RAM (SkipList sorted by user key)
-          │
-          │ (When Memtable reaches 4MB write buffer capacity)
-          ▼
-        3. Freeze Active Memtable into an Immutable Memtable
-          │
-          │ (Background worker thread flushes to disk)
-          ▼
-        4. Flush to Level 0 SSTable file on disk
-          │
-          │ (When Level 0 accumulates >= 4 files)
-          ▼
-        5. Background Compaction merges sorted runs into Level 1..6
-           Purges overwritten keys and dropped tombstones
+### The Read Path (Tiered Hierarchical Lookup)
 
-
-                              THE READ PATH
-                              =============
-
-  Client: db->Get(key, &value)
-    │
-    ├─► 1. Check Active Memtable in RAM ───────────────► Found? Return value
-    │
-    ├─► 2. Check Immutable Memtable in RAM ────────────► Found? Return value
-    │
-    └─► 3. Search Disk SSTables (Level 0 down to Level 6)
-          │
-          ├──► Check Bloom Filter first (~80 ns bitset check)
-          │      └─► Absent? Skip file completely (ZERO disk I/O)
-          │
-          ├──► Check LRU Block Cache (64MB)
-          │      └─► Cache Hit? Return 4KB block without reading disk
-          │
-          └──► Read 4KB Data Block from Disk
-                 └─► Binary search block restart array ──► Return value
+```
++-----------------------------------------------------------------------------+
+|                                 CLIENT                                      |
+|                            db->Get("user:123")                              |
++-----------------------------------------------------------------------------+
+                                       |
+                                       v
+                     +-----------------------------------+
+                     | (1) Check Active Memtable in RAM  | ---> Found? Return
+                     +-----------------------------------+
+                                       | Not found
+                                       v
+                     +-----------------------------------+
+                     | (2) Check Immutable Memtable RAM  | ---> Found? Return
+                     +-----------------------------------+
+                                       | Not found
+                                       v
+============================= DISK SSTABLE SEARCH =============================
+                Search Level 0 (Youngest -> Oldest) then Levels 1..6
+                                       |
+                                       v
+                 +-------------------------------------------+
+                 |  (3) Evaluate Bloom Filter (In-Memory)    |
+                 |      MurmurHash3 bitset check (~80 ns)    |
+                 +-------------------------------------------+
+                        |                             |
+                        | Absent (99% of misses)      | May Match
+                        v                             v
+                 +--------------+       +----------------------------+
+                 | Skip Table   |       | (4) Check LRU Block Cache  |
+                 | Zero Disk IO |       |     64MB In-Memory Cache   |
+                 +--------------+       +----------------------------+
+                                               |              |
+                                    Cache Hit  |              | Cache Miss
+                                               v              v
+                                  +---------------+   +-----------------------+
+                                  | Return cached |   | (5) Read 4KB Block    |
+                                  |  data block   |   |     from SSD / Disk   |
+                                  +---------------+   +-----------------------+
+                                           |                      |
+                                           +----------+-----------+
+                                                      |
+                                                      v
+                                        +----------------------------+
+                                        | (6) Binary search restart  |
+                                        |     array within 4KB block |
+                                        +----------------------------+
+                                                      |
+                                                      v
+                                        Found record -> Return Value
 ```
 
 1. **Writes are fast (~3 µs)**: Every `Put()` is appended to an on-disk Write-Ahead Log (WAL) and inserted into an in-memory SkipList (Memtable). No disk seeks.

@@ -4,10 +4,14 @@
 namespace strata {
 
 DBIterator::DBIterator(std::unique_ptr<InternalIterator> iter, SequenceNumber sequence,
-                       std::shared_ptr<Version> version_pin)
+                       std::shared_ptr<Version> version_pin,
+                       std::shared_ptr<Memtable> mem_pin,
+                       std::shared_ptr<Memtable> imm_pin)
     : iter_(std::move(iter)),
       sequence_(sequence),
       version_pin_(std::move(version_pin)),
+      mem_pin_(std::move(mem_pin)),
+      imm_pin_(std::move(imm_pin)),
       valid_(false) {}
 
 void DBIterator::FindNextUserEntry(bool /*seeking*/) {

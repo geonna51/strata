@@ -204,7 +204,8 @@ bool Version::Get(const Options& options, const Slice& user_key,
     if (ukey < f.smallest_key || ukey > f.largest_key) {
       continue;
     }
-    if (f.reader == nullptr) {
+    std::shared_ptr<SSTableReader> reader;
+    {
       std::lock_guard<std::mutex> lk(reader_mutex_);
       if (f.reader == nullptr) {
         std::string path = TableFileName(dbname_, f.number);
@@ -214,8 +215,9 @@ bool Version::Get(const Options& options, const Slice& user_key,
           return true;
         }
       }
+      reader = f.reader;
     }
-    if (f.reader->Get(user_key, seq, value, s, cache)) {
+    if (reader != nullptr && reader->Get(user_key, seq, value, s, cache)) {
       return true;
     }
   }
@@ -243,7 +245,8 @@ bool Version::Get(const Options& options, const Slice& user_key,
 
     if (candidate >= 0) {
       const auto& f = files_[level][candidate];
-      if (f.reader == nullptr) {
+      std::shared_ptr<SSTableReader> reader;
+      {
         std::lock_guard<std::mutex> lk(reader_mutex_);
         if (f.reader == nullptr) {
           std::string path = TableFileName(dbname_, f.number);
@@ -253,8 +256,9 @@ bool Version::Get(const Options& options, const Slice& user_key,
             return true;
           }
         }
+        reader = f.reader;
       }
-      if (f.reader->Get(user_key, seq, value, s, cache)) {
+      if (reader != nullptr && reader->Get(user_key, seq, value, s, cache)) {
         return true;
       }
     }
@@ -267,7 +271,8 @@ void Version::AddIterators(const Options& options, BlockCache* cache,
                            std::vector<Iterator*>* iters) {
   for (int level = 0; level < kNumLevels; ++level) {
     for (const auto& f : files_[level]) {
-      if (f.reader == nullptr) {
+      std::shared_ptr<SSTableReader> reader;
+      {
         std::lock_guard<std::mutex> lk(reader_mutex_);
         if (f.reader == nullptr) {
           std::string path = TableFileName(dbname_, f.number);
@@ -276,8 +281,11 @@ void Version::AddIterators(const Options& options, BlockCache* cache,
             continue;
           }
         }
+        reader = f.reader;
       }
-      iters->push_back(f.reader->NewIterator(cache));
+      if (reader != nullptr) {
+        iters->push_back(reader->NewIterator(cache));
+      }
     }
   }
 }

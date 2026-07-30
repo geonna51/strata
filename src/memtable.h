@@ -55,7 +55,8 @@ class Memtable {
 
   class MemTableIterator : public InternalIterator {
    public:
-    explicit MemTableIterator(const SkipList<MemtableEntry, MemtableKeyComparator>* list);
+    explicit MemTableIterator(const SkipList<MemtableEntry, MemtableKeyComparator>* list,
+                              std::shared_ptr<Memtable> pin = nullptr);
     ~MemTableIterator() override = default;
 
     bool Valid() const override;
@@ -74,10 +75,11 @@ class Memtable {
     const MemtableEntry& Entry() const;
 
    private:
+    std::shared_ptr<Memtable> pin_;
     typename SkipList<MemtableEntry, MemtableKeyComparator>::Iterator iter_;
   };
 
-  MemTableIterator* NewIterator();
+  MemTableIterator* NewIterator(std::shared_ptr<Memtable> pin = nullptr);
 
  private:
   SkipList<MemtableEntry, MemtableKeyComparator> table_;
