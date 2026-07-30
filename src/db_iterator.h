@@ -9,9 +9,12 @@
 
 namespace strata {
 
+class Version;
+
 class DBIterator : public Iterator {
  public:
-  DBIterator(std::unique_ptr<InternalIterator> iter, SequenceNumber sequence);
+  DBIterator(std::unique_ptr<InternalIterator> iter, SequenceNumber sequence,
+             std::shared_ptr<Version> version_pin = nullptr);
   ~DBIterator() override = default;
 
   DBIterator(const DBIterator&) = delete;
@@ -32,6 +35,7 @@ class DBIterator : public Iterator {
 
   std::unique_ptr<InternalIterator> iter_;
   SequenceNumber sequence_;
+  std::shared_ptr<Version> version_pin_;
   bool valid_;
   std::string saved_key_;
   std::string saved_value_;

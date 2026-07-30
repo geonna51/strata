@@ -14,7 +14,7 @@
 
 namespace strata {
 
-class SSTableReader {
+class SSTableReader : public std::enable_shared_from_this<SSTableReader> {
  public:
   static Status Open(const Options& options, const std::string& filename,
                      uint64_t file_number, uint64_t file_size,

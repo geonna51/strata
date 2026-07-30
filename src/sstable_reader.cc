@@ -262,9 +262,15 @@ Status SSTableReader::ReadBlock(const BlockHandle& handle,
                                std::shared_ptr<Block>* result) {
   std::string buf;
   buf.resize(handle.size + 4);
-  ssize_t n = ::pread(fd_, &buf[0], handle.size + 4, handle.offset);
-  if (n != static_cast<ssize_t>(handle.size + 4)) {
-    return Status::IOError("Failed to read block from file: " + filename_);
+  size_t bytes_read = 0;
+  size_t total_to_read = handle.size + 4;
+  while (bytes_read < total_to_read) {
+    ssize_t n = ::pread(fd_, &buf[bytes_read], total_to_read - bytes_read, handle.offset + bytes_read);
+    if (n <= 0) {
+      if (n < 0 && errno == EINTR) continue;
+      return Status::IOError("Failed to read block from file: " + filename_);
+    }
+    bytes_read += n;
   }
 
   uint32_t expected_crc = DecodeFixed32(&buf[handle.size]);
@@ -338,8 +344,7 @@ bool SSTableReader::Get(const Slice& user_key, SequenceNumber seq,
 }
 
 InternalIterator* SSTableReader::NewIterator(BlockCache* cache) {
-  return new TwoLevelIterator(
-      std::shared_ptr<SSTableReader>(this, [](SSTableReader*) {}), cache);
+  return new TwoLevelIterator(shared_from_this(), cache);
 }
 
 }  // namespace strata

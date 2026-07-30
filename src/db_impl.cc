@@ -9,6 +9,7 @@
 #include <iostream>
 #include "compaction.h"
 #include "db_iterator.h"
+#include "env.h"
 #include "filename.h"
 #include "merging_iterator.h"
 #include "sstable_builder.h"
@@ -171,8 +172,15 @@ Status DBImpl::WriteLevel0Table(Memtable* mem, VersionEdit* edit) {
     return s;
   }
 
+  std::shared_ptr<SSTableReader> reader;
+  Status s_open = SSTableReader::Open(options_, sst_path, file_num, builder.FileSize(), &reader);
+  if (!s_open.ok()) {
+    return s_open;
+  }
+
   edit->AddFile(0, file_num, builder.FileSize(), builder.SmallestKey(),
-                builder.LargestKey());
+                builder.LargestKey(), std::move(reader));
+  SyncDirectory(dbname_);
   return Status::OK();
 }
 
@@ -227,7 +235,7 @@ Status DBImpl::Delete(const std::string& key) {
 Status DBImpl::Get(const std::string& key, std::string* value) {
   std::shared_ptr<Memtable> mem;
   std::shared_ptr<Memtable> imm;
-  Version* current_v = nullptr;
+  std::shared_ptr<Version> current_v;
   SequenceNumber seq = 0;
 
   {
@@ -260,7 +268,7 @@ Status DBImpl::Get(const std::string& key, std::string* value) {
 Iterator* DBImpl::NewIterator() {
   std::shared_ptr<Memtable> mem;
   std::shared_ptr<Memtable> imm;
-  Version* current_v = nullptr;
+  std::shared_ptr<Version> current_v;
   SequenceNumber seq = 0;
 
   {
@@ -285,7 +293,7 @@ Iterator* DBImpl::NewIterator() {
 
   std::unique_ptr<InternalIterator> merging_iter(
       NewMergingIterator(std::move(iters)));
-  return new DBIterator(std::move(merging_iter), seq);
+  return new DBIterator(std::move(merging_iter), seq, current_v);
 }
 
 Status DBImpl::FlushMemTable() {

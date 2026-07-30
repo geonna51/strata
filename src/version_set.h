@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <set>
 #include <string>
 #include <utility>
@@ -37,7 +38,8 @@ class VersionEdit {
   void SetLastSequence(uint64_t seq);
   void DeleteFile(int level, uint64_t file);
   void AddFile(int level, uint64_t file, uint64_t file_size,
-               const std::string& smallest, const std::string& largest);
+               const std::string& smallest, const std::string& largest,
+               std::shared_ptr<SSTableReader> reader = nullptr);
 
   void EncodeTo(std::string* dst) const;
   Status DecodeFrom(const Slice& src);
@@ -89,6 +91,7 @@ class Version {
   friend class VersionSet;
   std::string dbname_;
   std::vector<FileMetaData> files_[kNumLevels];
+  mutable std::mutex reader_mutex_;
 };
 
 class VersionSet {
@@ -105,7 +108,7 @@ class VersionSet {
   // Recover state from persistent MANIFEST file.
   Status Recover();
 
-  Version* current() const { return current_.get(); }
+  std::shared_ptr<Version> current() const { return current_; }
   uint64_t LastSequence() const { return last_sequence_; }
   void SetLastSequence(uint64_t s) {
     if (s > last_sequence_) last_sequence_ = s;

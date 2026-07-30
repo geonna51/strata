@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iostream>
 #include "coding.h"
+#include "env.h"
 #include "filename.h"
 
 namespace strata {
@@ -58,13 +59,15 @@ void VersionEdit::DeleteFile(int level, uint64_t file) {
 
 void VersionEdit::AddFile(int level, uint64_t file, uint64_t file_size,
                          const std::string& smallest,
-                         const std::string& largest) {
+                         const std::string& largest,
+                         std::shared_ptr<SSTableReader> reader) {
   FileMetaData meta;
   meta.number = file;
   meta.file_size = file_size;
   meta.smallest_key = smallest;
   meta.largest_key = largest;
-  new_files_.push_back({level, meta});
+  meta.reader = std::move(reader);
+  new_files_.push_back({level, std::move(meta)});
 }
 
 void VersionEdit::EncodeTo(std::string* dst) const {
@@ -202,11 +205,14 @@ bool Version::Get(const Options& options, const Slice& user_key,
       continue;
     }
     if (f.reader == nullptr) {
-      std::string path = TableFileName(dbname_, f.number);
-      Status st = SSTableReader::Open(options, path, f.number, f.file_size, &f.reader);
-      if (!st.ok()) {
-        *s = st;
-        return true;
+      std::lock_guard<std::mutex> lk(reader_mutex_);
+      if (f.reader == nullptr) {
+        std::string path = TableFileName(dbname_, f.number);
+        Status st = SSTableReader::Open(options, path, f.number, f.file_size, &f.reader);
+        if (!st.ok()) {
+          *s = st;
+          return true;
+        }
       }
     }
     if (f.reader->Get(user_key, seq, value, s, cache)) {
@@ -238,11 +244,14 @@ bool Version::Get(const Options& options, const Slice& user_key,
     if (candidate >= 0) {
       const auto& f = files_[level][candidate];
       if (f.reader == nullptr) {
-        std::string path = TableFileName(dbname_, f.number);
-        Status st = SSTableReader::Open(options, path, f.number, f.file_size, &f.reader);
-        if (!st.ok()) {
-          *s = st;
-          return true;
+        std::lock_guard<std::mutex> lk(reader_mutex_);
+        if (f.reader == nullptr) {
+          std::string path = TableFileName(dbname_, f.number);
+          Status st = SSTableReader::Open(options, path, f.number, f.file_size, &f.reader);
+          if (!st.ok()) {
+            *s = st;
+            return true;
+          }
         }
       }
       if (f.reader->Get(user_key, seq, value, s, cache)) {
@@ -259,10 +268,13 @@ void Version::AddIterators(const Options& options, BlockCache* cache,
   for (int level = 0; level < kNumLevels; ++level) {
     for (const auto& f : files_[level]) {
       if (f.reader == nullptr) {
-        std::string path = TableFileName(dbname_, f.number);
-        Status st = SSTableReader::Open(options, path, f.number, f.file_size, &f.reader);
-        if (!st.ok()) {
-          continue;
+        std::lock_guard<std::mutex> lk(reader_mutex_);
+        if (f.reader == nullptr) {
+          std::string path = TableFileName(dbname_, f.number);
+          Status st = SSTableReader::Open(options, path, f.number, f.file_size, &f.reader);
+          if (!st.ok()) {
+            continue;
+          }
         }
       }
       iters->push_back(f.reader->NewIterator(cache));
@@ -332,7 +344,11 @@ Status VersionSet::LogAndApply(VersionEdit* edit) {
   }
 
   // Add new files
-  for (const auto& item : edit->new_files_) {
+  for (auto& item : edit->new_files_) {
+    if (item.second.reader == nullptr && options_ != nullptr) {
+      std::string path = TableFileName(dbname_, item.second.number);
+      SSTableReader::Open(*options_, path, item.second.number, item.second.file_size, &item.second.reader);
+    }
     v->files_[item.first].push_back(item.second);
   }
 
@@ -362,17 +378,10 @@ Status VersionSet::LogAndApply(VersionEdit* edit) {
       return s;
     }
 
-    // Atomically write CURRENT file pointing to MANIFEST filename
-    std::string current_tmp = CurrentFileName(dbname_) + ".tmp";
-    std::ofstream out(current_tmp);
-    if (!out.is_open()) {
-      return Status::IOError("Failed to create " + current_tmp);
-    }
-    out << "MANIFEST-" << (manifest_file_number_ < 10 ? "00000" : "0000")
-        << manifest_file_number_ << "\n";
-    out.close();
-    if (::rename(current_tmp.c_str(), CurrentFileName(dbname_).c_str()) != 0) {
-      return Status::IOError("Failed to update CURRENT file");
+    Status s_curr = SetCurrentFile(dbname_, manifest_file_number_);
+    if (!s_curr.ok()) {
+      descriptor_log_.reset();
+      return s_curr;
     }
   }
 
@@ -466,6 +475,18 @@ Status VersionSet::Recover() {
               [](const FileMetaData& a, const FileMetaData& b) {
                 return a.smallest_key < b.smallest_key;
               });
+  }
+
+  // Ensure readers are opened for recovered files
+  if (options_ != nullptr) {
+    for (int level = 0; level < kNumLevels; ++level) {
+      for (auto& f : v->files_[level]) {
+        if (f.reader == nullptr) {
+          std::string path = TableFileName(dbname_, f.number);
+          SSTableReader::Open(*options_, path, f.number, f.file_size, &f.reader);
+        }
+      }
+    }
   }
 
   current_ = v;

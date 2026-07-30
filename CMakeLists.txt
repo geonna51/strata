@@ -65,6 +65,10 @@ add_executable(version_set_test tests/version_set_test.cc)
 target_link_libraries(version_set_test PRIVATE strata)
 add_test(NAME version_set_test COMMAND version_set_test)
 
+add_executable(concurrency_test tests/concurrency_test.cc)
+target_link_libraries(concurrency_test PRIVATE strata)
+add_test(NAME concurrency_test COMMAND concurrency_test)
+
 add_executable(crash_writer tests/crash_writer.cc)
 target_link_libraries(crash_writer PRIVATE strata)
 
