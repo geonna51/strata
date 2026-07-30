@@ -75,4 +75,4 @@ target_link_libraries(crash_writer PRIVATE strata)
 add_executable(db_bench benchmarks/db_bench.cc)
 target_link_libraries(db_bench PRIVATE strata)
 
-add_test(NAME crash_test COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tests/crash_test.py)
+add_test(NAME crash_test COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tests/crash_test.py $<TARGET_FILE:crash_writer>)

@@ -82,14 +82,14 @@ void Block::Iter::ParseEntryAt(uint32_t offset) {
   }
 
   // Ensure minimum header size: klen(4) + seq(8) + type(1) + vlen(4) = 17 bytes
-  if (offset + 17 > restarts_offset_) {
+  if (static_cast<uint64_t>(offset) + 17 > restarts_offset_) {
     status_ = Status::Corruption("Truncated block entry");
     current_ = restarts_offset_;
     return;
   }
 
   uint32_t klen = DecodeFixed32(data_ + offset);
-  if (offset + 17 + klen > restarts_offset_) {
+  if (static_cast<uint64_t>(offset) + 17 + klen > restarts_offset_) {
     status_ = Status::Corruption("Truncated block entry key");
     current_ = restarts_offset_;
     return;
@@ -100,7 +100,7 @@ void Block::Iter::ParseEntryAt(uint32_t offset) {
   current_type_ = static_cast<ValueType>(data_[offset + 4 + klen + 8]);
 
   uint32_t vlen = DecodeFixed32(data_ + offset + 4 + klen + 9);
-  if (offset + 17 + klen + vlen > restarts_offset_) {
+  if (static_cast<uint64_t>(offset) + 17 + klen + vlen > restarts_offset_) {
     status_ = Status::Corruption("Truncated block entry value");
     current_ = restarts_offset_;
     return;

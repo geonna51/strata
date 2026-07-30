@@ -155,6 +155,14 @@ Status WalReader::ReadRecord(SequenceNumber* seq, ValueType* type,
   uint32_t expected_crc = DecodeFixed32(header);
   uint32_t length = DecodeFixed32(header + 4);
 
+  static constexpr uint32_t kMaxRecordSize = 64 * 1024 * 1024;  // 64MB limit
+  if (length > kMaxRecordSize) {
+    if (allow_partial_eof) {
+      return Status::NotFound("Invalid WAL record length at EOF");
+    }
+    return Status::Corruption("WAL record length exceeds maximum allowed size");
+  }
+
   std::string payload;
   payload.resize(length);
 

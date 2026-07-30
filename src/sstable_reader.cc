@@ -107,7 +107,8 @@ class TwoLevelIterator : public InternalIterator {
       return;
     }
 
-    Slice handle_slice = index_iter_->Value();
+    std::string handle_str = index_iter_->Value();
+    Slice handle_slice(handle_str);
     BlockHandle handle;
     Status s = handle.DecodeFrom(&handle_slice);
     if (!s.ok()) {
@@ -241,6 +242,12 @@ Status SSTableReader::Open(const Options& options, const std::string& filename,
 
   // Read filter block
   if (filter_handle.size > 0) {
+    static constexpr uint64_t kMaxFilterSize = 64 * 1024 * 1024;
+    if (filter_handle.size > kMaxFilterSize ||
+        filter_handle.offset + filter_handle.size + 4 > file_size) {
+      ::close(fd);
+      return Status::Corruption("Invalid filter handle bounds: " + filename);
+    }
     std::string buf;
     buf.resize(filter_handle.size + 4);
     ssize_t fn = ::pread(fd, &buf[0], filter_handle.size + 4, filter_handle.offset);
@@ -260,6 +267,11 @@ Status SSTableReader::Open(const Options& options, const std::string& filename,
 
 Status SSTableReader::ReadBlock(const BlockHandle& handle,
                                std::shared_ptr<Block>* result) {
+  static constexpr uint64_t kMaxBlockSize = 64 * 1024 * 1024;
+  if (handle.size > kMaxBlockSize || handle.offset + handle.size + 4 > file_size_) {
+    return Status::Corruption("Invalid block handle bounds in " + filename_);
+  }
+
   std::string buf;
   buf.resize(handle.size + 4);
   size_t bytes_read = 0;
@@ -297,7 +309,8 @@ bool SSTableReader::Get(const Slice& user_key, SequenceNumber seq,
     return false;
   }
 
-  Slice handle_slice = index_iter->Value();
+  std::string handle_str = index_iter->Value();
+  Slice handle_slice(handle_str);
   BlockHandle handle;
   Status decode_s = handle.DecodeFrom(&handle_slice);
   if (!decode_s.ok()) {

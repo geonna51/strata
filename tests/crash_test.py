@@ -10,10 +10,28 @@ import time
 def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_dir = os.path.dirname(script_dir)
-    bin_path = os.path.join(project_dir, "build", "crash_writer")
 
-    if not os.path.exists(bin_path):
-        print(f"Error: binary not found at {bin_path}. Run cmake and make first.")
+    bin_path = None
+    if len(sys.argv) > 1 and os.path.exists(sys.argv[1]):
+        bin_path = sys.argv[1]
+    elif "CRASH_WRITER_BIN" in os.environ and os.path.exists(os.environ["CRASH_WRITER_BIN"]):
+        bin_path = os.environ["CRASH_WRITER_BIN"]
+    else:
+        candidates = [
+            os.path.join(project_dir, "build", "crash_writer"),
+            os.path.join(project_dir, "build-asan", "crash_writer"),
+            os.path.join(project_dir, "build-tsan", "crash_writer"),
+            os.path.join(os.getcwd(), "crash_writer"),
+            os.path.join(os.getcwd(), "build", "crash_writer"),
+            os.path.join(os.getcwd(), "build-asan", "crash_writer"),
+        ]
+        for cand in candidates:
+            if os.path.exists(cand):
+                bin_path = cand
+                break
+
+    if not bin_path or not os.path.exists(bin_path):
+        print("Error: crash_writer binary not found. Run cmake and build first.")
         sys.exit(1)
 
     db_path = "/tmp/strata_crash_torture_db"
